@@ -10,4 +10,13 @@ export default defineConfig({
       },
     }),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000', // Matches your backend PORT in index.js
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 })
