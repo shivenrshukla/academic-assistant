@@ -1,7 +1,14 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { searchVectorStore } from './vectorStore.js';
+import 'dotenv/config'; // <--- 1. CRITICAL FIX: Load .env variables
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// 2. Initialize the client (Check if key exists)
+const apiKey = process.env.GEMINI_API_KEY;
+if (!apiKey) {
+  throw new Error("GEMINI_API_KEY is missing in backend .env file");
+}
+
+const genAI = new GoogleGenerativeAI(apiKey);
 
 export async function processQuery(query, context = [], files = []) {
     try {
@@ -13,7 +20,7 @@ export async function processQuery(query, context = [], files = []) {
         const prompt = buildAcademicPrompt(query, contextText);
 
         const model = genAI.getGenerativeModel({
-            model: 'gemini-pro',
+            model: "gemini-2.5-flash",
             generationConfig: {
                 temperature: 0.3,
                 topK: 40,

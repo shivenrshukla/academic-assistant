@@ -22,6 +22,7 @@ function App() {
   // In App.jsx
 
   const uploadFiles = async (files) => {
+    setIsLoading(true);
     // 1. Create the FormData object
     const formData = new FormData();
     
@@ -30,7 +31,6 @@ function App() {
       formData.append('files', file); 
     });
 
-    setIsLoading(true);
     addMessage('system', 'Uploading and processing files...');
 
     try {
@@ -98,7 +98,7 @@ function App() {
         <div className='chat-container'>
           <FileUpload onUpload={uploadFiles} />
             <ChatBox
-              message={messages}
+              messages={messages}
               isLoading={isLoading}
               messagesEndRef={messageEndRef}
             />

@@ -438,6 +438,8 @@
   mask-composite: exclude;
   opacity: 0;
   transition: opacity 0.3s ease;
+  /* ✅ ADD THIS LINE: This lets clicks pass through to the textarea below */
+  pointer-events: none;
 }
 
 .input-container:focus-within::before {
