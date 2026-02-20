@@ -1,115 +1,118 @@
 import os
-import time # Added for rate limiting delays
-import faiss # type: ignore
+import faiss
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from langchain_google_genai import GoogleGenerativeAIEmbeddings
+from sentence_transformers import SentenceTransformer
 from datetime import datetime
-from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
-load_dotenv()
+# ── Config ────────────────────────────────────────────────────────────────────
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
-app = FastAPI()
+# ── Local Embedding Model ─────────────────────────────────────────────────────
+# Downloads once (~90 MB), then runs fully offline.
+# Swap the model name for a larger one (e.g. "all-mpnet-base-v2") if you need
+# higher accuracy at the cost of speed.
+print("🔌 Loading local embedding model...")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+EMBEDDING_DIM = model.get_sentence_embedding_dimension()
+print(f"✅ Model loaded  |  Embedding dim: {EMBEDDING_DIM}")
 
-# 1. Validate API Key
-api_key = os.getenv("GEMINI_API_KEY")
-if not api_key:
-    print("❌ CRITICAL: GEMINI_API_KEY not found in .env")
-    raise ValueError("GEMINI_API_KEY not found")
-
-os.environ["GOOGLE_API_KEY"] = api_key
-
-# 2. Initialize Embeddings
-# We use text-embedding-004 as it is the latest stable model
-print("🔌 Connecting to Google AI...")
-try:
-    embeddings = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-    embeddings.embed_query("test connection") # Fail fast check
-    print("✅ AI Service Initialized Successfully")
-except Exception as e:
-    print(f"❌ STARTUP ERROR: Could not connect to Google AI. Details:\n{e}")
-    # We allow the server to start, but requests will likely fail
-    
-EMBEDDING_DIM = 768
+# ── FAISS Index & Document Store ──────────────────────────────────────────────
 index = faiss.IndexFlatIP(EMBEDDING_DIM)
-documents = []
+documents: list[dict] = []
 
-def normalize(vectors):
+
+def normalize(vectors: np.ndarray) -> np.ndarray:
     faiss.normalize_L2(vectors)
     return vectors
 
+
+def embed_texts(texts: list[str]) -> np.ndarray:
+    """Embed a list of strings locally and return a float32 numpy array."""
+    vecs = model.encode(texts, show_progress_bar=False, convert_to_numpy=True)
+    return vecs.astype("float32")
+
+
+# ── Cleanup Helper ────────────────────────────────────────────────────────────
+def clear_session():
+    """Reset the in-memory FAISS index and document store."""
+    global index, documents
+
+    index = faiss.IndexFlatIP(EMBEDDING_DIM)
+    documents.clear()
+
+    print("🗑️ FAISS index cleared.")
+    print("🗑️ Document store cleared.")
+    print("✅ Session reset complete.")
+
+
+# ── Lifespan (startup / shutdown hooks) ───────────────────────────────────────
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup — nothing extra needed; model is already loaded above
+    yield
+    # shutdown — runs when the server stops (Ctrl-C, SIGTERM, etc.)
+    print("\n🔴 Server shutting down — cleaning up session data...")
+    clear_session()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+# ── Request Models ────────────────────────────────────────────────────────────
 class AddRequest(BaseModel):
     chunks: list[str]
     filename: str
+
 
 class SearchRequest(BaseModel):
     query: str
     top_k: int = 5
 
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 @app.post("/add")
 def add_documents(req: AddRequest):
     try:
-        print(f"📥 Received request to process {len(req.chunks)} chunks from: {req.filename}")
-        
+        print(f"📥 Indexing {len(req.chunks)} chunks from: {req.filename}")
+
         if not req.chunks:
             return {"status": "skipped", "message": "No chunks provided"}
 
-        # 3. BATCH PROCESSING (The Fix for 429 Errors)
-        # We split the chunks into groups of 10 and process them one by one.
-        BATCH_SIZE = 10
-        all_vectors = []
-        
-        total_batches = (len(req.chunks) + BATCH_SIZE - 1) // BATCH_SIZE
-        
-        for i in range(0, len(req.chunks), BATCH_SIZE):
-            batch = req.chunks[i : i + BATCH_SIZE]
-            current_batch_num = (i // BATCH_SIZE) + 1
-            print(f"   ⏳ Embedding batch {current_batch_num}/{total_batches} ({len(batch)} chunks)...")
-            
-            try:
-                # Embed just this small batch
-                batch_vectors = embeddings.embed_documents(batch)
-                all_vectors.extend(batch_vectors)
-                
-                # CRITICAL: Sleep for 2 seconds between batches to respect Free Tier rate limits
-                if i + BATCH_SIZE < len(req.chunks):
-                    time.sleep(2)
-                    
-            except Exception as batch_error:
-                print(f"❌ Error embedding batch {current_batch_num}: {batch_error}")
-                raise batch_error
-
-        # Convert all collected vectors to numpy array
-        vectors = np.array(all_vectors).astype("float32")
+        # Embed locally — no API calls, no rate limits, no batching delays needed
+        vectors = embed_texts(req.chunks)
         vectors = normalize(vectors)
 
-        # Add to FAISS
-        index.add(vectors) # type: ignore
+        index.add(x=vectors) # type: ignore
 
-        # Store Metadata
         for chunk in req.chunks:
             documents.append({
                 "content": chunk,
                 "filename": req.filename,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.utcnow().isoformat(),
             })
 
-        print(f"✅ Successfully indexed {req.filename}")
+        print(f"✅ Indexed {len(req.chunks)} chunks from {req.filename}")
         return {"status": "ok", "chunks_added": len(req.chunks)}
-    
+
     except Exception as e:
         print(f"❌ Error in /add: {e}")
-        raise HTTPException(status_code=500, detail=f"AI Service Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/search")
 def search(req: SearchRequest):
     try:
-        query_vec = embeddings.embed_query(req.query)
-        query_vec = np.array([query_vec]).astype("float32")
+        if index.ntotal == 0:
+            return []
+
+        query_vec = embed_texts([req.query])
         query_vec = normalize(query_vec)
 
-        scores, indices = index.search(query_vec, req.top_k) # type: ignore
+        scores, indices = index.search(x=query_vec, k=req.top_k) # type: ignore
 
         results = []
         for idx, score in zip(indices[0], scores[0]):
@@ -118,10 +121,18 @@ def search(req: SearchRequest):
             results.append({
                 "content": documents[idx]["content"],
                 "filename": documents[idx]["filename"],
-                "similarity": float(score)
+                "similarity": float(score),
             })
 
         return results
+
     except Exception as e:
-        print(f"Error in /search: {e}")
+        print(f"❌ Error in /search: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/clear")
+def clear_endpoint():
+    """Optional manual endpoint to clear the session without restarting."""
+    clear_session()
+    return {"status": "ok", "message": "Session cleared"}

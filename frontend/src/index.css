@@ -1,55 +1,192 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 230 25% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 230 25% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 25% 10%;
+    --primary: 185 80% 45%;
+    --primary-foreground: 230 25% 5%;
+    --secondary: 270 60% 60%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 220 15% 92%;
+    --muted-foreground: 220 10% 45%;
+    --accent: 270 60% 60%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 185 80% 45%;
+    --radius: 0.75rem;
+
+    --neon-cyan: 185 80% 45%;
+    --neon-violet: 270 60% 60%;
+    --glass-bg: 220 20% 97% / 0.7;
+    --glass-border: 220 15% 88% / 0.5;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 230 25% 10%;
+    --sidebar-primary: 185 80% 45%;
+    --sidebar-primary-foreground: 230 25% 5%;
+    --sidebar-accent: 220 15% 94%;
+    --sidebar-accent-foreground: 230 25% 10%;
+    --sidebar-border: 220 15% 88%;
+    --sidebar-ring: 185 80% 45%;
+  }
+
+  .dark {
+    --background: 230 25% 7%;
+    --foreground: 220 20% 92%;
+    --card: 230 20% 11%;
+    --card-foreground: 220 20% 92%;
+    --popover: 230 20% 11%;
+    --popover-foreground: 220 20% 92%;
+    --primary: 185 80% 50%;
+    --primary-foreground: 230 25% 5%;
+    --secondary: 270 60% 65%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 230 18% 16%;
+    --muted-foreground: 220 10% 55%;
+    --accent: 270 60% 65%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 230 15% 18%;
+    --input: 230 15% 18%;
+    --ring: 185 80% 50%;
+    --radius: 0.75rem;
+
+    --neon-cyan: 185 80% 50%;
+    --neon-violet: 270 60% 65%;
+    --glass-bg: 230 20% 11% / 0.6;
+    --glass-border: 230 15% 22% / 0.5;
+
+    --sidebar-background: 230 22% 9%;
+    --sidebar-foreground: 220 20% 92%;
+    --sidebar-primary: 185 80% 50%;
+    --sidebar-primary-foreground: 230 25% 5%;
+    --sidebar-accent: 230 18% 14%;
+    --sidebar-accent-foreground: 220 20% 92%;
+    --sidebar-border: 230 15% 18%;
+    --sidebar-ring: 185 80% 50%;
+  }
 }
 
-:root {
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Space Grotesk', sans-serif;
+  }
 }
 
-html {
-  scroll-behavior: smooth;
+@layer components {
+  .glass-panel {
+    @apply bg-card/70 backdrop-blur-xl border border-border/50 rounded-xl;
+  }
+  .neon-glow {
+    text-shadow: 0 0 20px hsl(var(--primary) / 0.5), 0 0 40px hsl(var(--primary) / 0.2);
+  }
+  .gradient-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, hsl(var(--neon-cyan)), hsl(var(--neon-violet)));
+  }
 }
 
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-  background: #0a0e1a;
-  color: #ffffff;
-  overflow-x: hidden;
+/* Floating orb animation */
+@keyframes orb-drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(80px, -60px) scale(1.1); }
+  66% { transform: translate(-40px, 40px) scale(0.95); }
+}
+@keyframes orb-drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-60px, 80px) scale(1.05); }
+  66% { transform: translate(50px, -30px) scale(0.9); }
+}
+@keyframes orb-drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 60px) scale(1.08); }
 }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.3;
+  pointer-events: none;
+}
+.dark .orb { opacity: 0.15; }
+
+.orb-1 {
+  width: 400px; height: 400px;
+  background: hsl(var(--neon-cyan));
+  top: -100px; left: -100px;
+  animation: orb-drift-1 20s ease-in-out infinite;
+}
+.orb-2 {
+  width: 350px; height: 350px;
+  background: hsl(var(--neon-violet));
+  bottom: -80px; right: -80px;
+  animation: orb-drift-2 25s ease-in-out infinite;
+}
+.orb-3 {
+  width: 250px; height: 250px;
+  background: hsl(var(--neon-cyan));
+  top: 40%; right: 20%;
+  animation: orb-drift-3 18s ease-in-out infinite;
 }
 
-a {
-  font-weight: 500;
-  color: #00d9ff;
-  text-decoration: none;
-  transition: color 0.3s ease;
+/* Typing dots */
+@keyframes bounce-dot {
+  0%, 80%, 100% { transform: translateY(0); }
+  40% { transform: translateY(-8px); }
+}
+.typing-dot {
+  @apply w-2 h-2 rounded-full bg-primary;
+  animation: bounce-dot 1.2s ease-in-out infinite;
+}
+.typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+/* Message slide-in */
+@keyframes msg-slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.msg-animate {
+  animation: msg-slide-in 0.35s ease-out both;
 }
 
-a:hover {
-  color: #667eea;
+/* Glow pulse for title */
+@keyframes glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 8px hsl(var(--primary) / 0.4)); }
+  50% { filter: drop-shadow(0 0 20px hsl(var(--primary) / 0.6)); }
+}
+.glow-pulse {
+  animation: glow-pulse 3s ease-in-out infinite;
 }
 
-button {
-  font-family: inherit;
+/* Status ping */
+@keyframes ping-status {
+  0% { transform: scale(1); opacity: 1; }
+  75%, 100% { transform: scale(2.2); opacity: 0; }
 }
 
-::selection {
-  background: rgba(0, 217, 255, 0.3);
-  color: #ffffff;
-}
-
-::-moz-selection {
-  background: rgba(0, 217, 255, 0.3);
-  color: #ffffff;
+/* Theme transition */
+body, body * {
+  transition: background-color 0.3s ease, color 0.15s ease, border-color 0.3s ease;
 }

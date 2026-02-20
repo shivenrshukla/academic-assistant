@@ -62,6 +62,7 @@ function buildAcademicPrompt(query, contextText) {
             - Cite specific sources when making claims
             - Maintain academic rigor and precision
             - Use formal academic language
+            - Do NOT use asterisks or markdown formatting.
 
         RESPONSE:`;
 }
