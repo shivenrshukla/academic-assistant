@@ -6,4 +6,4 @@ uploads/
 dist/
 build/
 venv/
-pycache/
+__pycache__/
