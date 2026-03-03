@@ -1,80 +1,75 @@
-import fetch from "node-fetch";
-import { chunkText } from "./processDocument.js";
+// services/vectorStore.js
+/**
+ * FIX 1: Removed direct Qdrant JS client entirely.
+ *         All vector ops now go through the Python faiss_service via HTTP.
+ *         This ensures add and search use the same all-MiniLM-L6-v2 model.
+ *
+ * FIX 2: `searchVectorStore` was never exported — ragService.js import would
+ *         silently receive `undefined` and crash at call time.
+ */
 
-const FAISS_BASE_URL = "http://localhost:8001";
+const PYTHON_SERVICE_URL = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000';
 
 /**
- * Sends document chunks to the Python FAISS service
+ * Index text chunks into a Qdrant collection via the Python service.
+ * @param {{ chunks: string[], collectionName: string }} params
  */
-export async function addToVectorStore(text, filename) {
-  try {
-    const chunks = chunkText(text);
+export const addToVectorStore = async ({ chunks, collectionName }) => {
+  const response = await fetch(`${PYTHON_SERVICE_URL}/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chunks, collection_name: collectionName }),
+  });
 
-    if (!chunks.length) {
-      console.warn("No chunks generated for document:", filename);
-      return;
-    }
-
-    const response = await fetch(`${FAISS_BASE_URL}/add`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        chunks,
-        filename
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`FAISS add failed: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    console.log(`Added ${result.chunks_added} chunks from ${filename} to FAISS`);
-
-  } catch (error) {
-    console.error("Vector store error:", error);
-    throw error;
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Vector store add error: ${err}`);
   }
-}
+
+  return response.json();
+};
 
 /**
- * Queries FAISS for top-k similar document chunks
+ * Search a Qdrant collection for chunks relevant to a query.
+ * @param {string} query
+ * @param {string} collectionName - the user+document scoped collection
+ * @param {number} topK
+ * @returns {Promise<Array<{ content: string, similarity: number }>>}
  */
-export async function searchVectorStore(query, topK = 5) {
-  try {
-    const response = await fetch(`${FAISS_BASE_URL}/search`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        query,
-        top_k: topK
-      })
-    });
+export const searchVectorStore = async (query, collectionName, topK = 5) => {
+  const response = await fetch(`${PYTHON_SERVICE_URL}/search`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query,
+      collection_name: collectionName,
+      top_k: topK,
+    }),
+  });
 
-    if (!response.ok) {
-      throw new Error(`FAISS search failed: ${response.statusText}`);
-    }
-
-    const results = await response.json();
-    return results;
-
-  } catch (error) {
-    console.error("Search error:", error);
-    return [];
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Vector store search error: ${err}`);
   }
-}
+
+  return response.json(); // [{ content, similarity }]
+};
 
 /**
- * FAISS is stateful on the Python side.
- * Clearing vectors should be implemented as a Python endpoint if required.
+ * Delete an entire Qdrant collection (called during 7-day cleanup).
+ * @param {string} collectionName
  */
-export function clearVectorStore() {
-  console.warn(
-    "clearVectorStore is not implemented on Node.js. " +
-    "FAISS state is managed by the Python service."
-  );
-}
+export const deleteCollection = async (collectionName) => {
+  const response = await fetch(`${PYTHON_SERVICE_URL}/delete_collection`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ collection_name: collectionName }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    console.warn(`⚠️ Qdrant delete skipped (${collectionName}): ${err}`);
+  } else {
+    console.log(`🗑️ Qdrant: deleted collection ${collectionName}`);
+  }
+};

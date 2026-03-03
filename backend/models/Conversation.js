@@ -1,0 +1,35 @@
+// models/Conversation.js
+import mongoose from 'mongoose';
+
+const conversationSchema = new mongoose.Schema(
+  {
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+      index: true,
+    },
+    document: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Document',
+      required: true,
+    },
+    title: {
+      type: String,
+      default: 'New Chat',
+    },
+    lastMessageAt: {
+      type: Date,
+    },
+    expiresAt: {
+      type: Date,
+    },
+  },
+  { timestamps: true }
+);
+
+// TTL index — MongoDB auto-deletes conversation when expiresAt is reached
+conversationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// FIX: was `module.exports` mixed with ESM `import`
+export default mongoose.model('Conversation', conversationSchema);

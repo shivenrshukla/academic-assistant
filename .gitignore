@@ -7,3 +7,4 @@ dist/
 build/
 venv/
 __pycache__/
+firebase-service-account.json

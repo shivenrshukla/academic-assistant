@@ -1,68 +1,96 @@
+// services/ragService.js
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { searchVectorStore } from './vectorStore.js';
-import 'dotenv/config'; // <--- 1. CRITICAL FIX: Load .env variables
+import dotenv from 'dotenv'
 
-// 2. Initialize the client (Check if key exists)
+dotenv.config()
+
 const apiKey = process.env.GEMINI_API_KEY;
 if (!apiKey) {
-  throw new Error("GEMINI_API_KEY is missing in backend .env file");
+  throw new Error('GEMINI_API_KEY is missing in .env');
 }
 
 const genAI = new GoogleGenerativeAI(apiKey);
 
-export async function processQuery(query, context = [], files = []) {
-    try {
-        const relevantDocs = await searchVectorStore(query, 5);
+/**
+ * Run a RAG query against a specific Qdrant collection.
+ *
+ * FIX 1: `collectionName` is now a required parameter.
+ *         Previously searchVectorStore was called with no collection name —
+ *         it had no idea which Qdrant collection to search.
+ *
+ * FIX 2: `context` (conversation history) is now included in the prompt.
+ *
+ * @param {string} query
+ * @param {string} collectionName  - Qdrant collection for this document
+ * @param {Array<{ role: string, content: string }>} history - prior messages
+ * @returns {Promise<{ answer: string, citations: Array<{ score: number }> }>}
+ */
+export async function processQuery(query, collectionName, history = []) {
+  try {
+    // Search the correct scoped collection
+    const relevantDocs = await searchVectorStore(query, collectionName, 5);
 
-        const contextText = relevantDocs.length > 0 ? relevantDocs.map((doc, i) => `[Sources ${i + 1} - ${doc.filename}]:\n${doc.content}`).join('\n\n')
-                            : 'No uploaded documents available for context.';
+    const contextText =
+      relevantDocs.length > 0
+        ? relevantDocs
+            .map((doc, i) => `[Source ${i + 1}]:\n${doc.content}`)
+            .join('\n\n')
+        : 'No relevant content found in the uploaded document.';
 
-        const prompt = buildAcademicPrompt(query, contextText);
+    // Build conversation history string for the prompt
+    const historyText =
+      history.length > 0
+        ? history
+            .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
+            .join('\n')
+        : '';
 
-        const model = genAI.getGenerativeModel({
-            model: "gemini-2.5-flash",
-            generationConfig: {
-                temperature: 0.3,
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 2048,
-            }
-        });
+    const prompt = buildAcademicPrompt(query, contextText, historyText);
 
-        const result = await model.generateContent(prompt);
-        const response = result.response;
-        const text = response.text();
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      generationConfig: {
+        temperature: 0.3,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 2048,
+      },
+    });
 
-        return text;
-    } catch (error) {
-        console.error('RAG processing error:', error);
-        throw new Error('Failed to process query with RAG pipeline');
-    }
+    const result = await model.generateContent(prompt);
+    const answer = result.response.text();
+
+    // Return answer + citation scores so chatController can save them
+    const citations = relevantDocs.map((doc) => ({ score: doc.similarity }));
+
+    return { answer, citations };
+  } catch (error) {
+    console.error('RAG processing error:', error);
+    throw new Error('Failed to process query with RAG pipeline');
+  }
 }
 
-function buildAcademicPrompt(query, contextText) {
-  return `You are an academically rigorous AI assistant specializing in providing precise, well-reasoned responses based on provided documents. Your responses should be:
+function buildAcademicPrompt(query, contextText, historyText) {
+  return `You are an academically rigorous AI assistant. Your responses must be:
+1. Evidence-based, citing information from the provided document context
+2. Clear, well-structured, and formally written
+3. Honest about the limits of the provided context
+4. Free of asterisks or markdown formatting
 
-        1. Academically precise and formal in tone
-        2. Evidence-based, citing specific information from the provided context
-        3. Clear and well-structured
-        4. Objective and unbiased
-        5. Comprehensive yet concise
+${historyText ? `CONVERSATION HISTORY:\n${historyText}\n` : ''}
 
-        CONTEXT FROM UPLOADED DOCUMENTS:
-        ${contextText}
+DOCUMENT CONTEXT:
+${contextText}
 
-        USER QUERY:
-        ${query}
+USER QUERY:
+${query}
 
-        INSTRUCTIONS:
-            - Analyze the provided context carefully
-            - Answer the query using information from the context
-            - If the context doesn't contain sufficient information, acknowledge this limitation
-            - Cite specific sources when making claims
-            - Maintain academic rigor and precision
-            - Use formal academic language
-            - Do NOT use asterisks or markdown formatting.
+INSTRUCTIONS:
+- Answer using information from the document context above
+- If the context is insufficient, clearly state that limitation
+- Maintain academic precision and formal language
+- Do NOT use asterisks or markdown formatting
 
-        RESPONSE:`;
+RESPONSE:`;
 }

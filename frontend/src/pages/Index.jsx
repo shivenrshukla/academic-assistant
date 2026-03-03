@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useTheme } from '@/hooks/useTheme';
+import { useAuth } from '@/contexts/AuthContext'; // 👈 Import your auth hook
 import AmbientBackground from '@/components/AmbientBackground';
 import AppHeader from '@/components/AppHeader';
 import FilePanel from '@/components/FilePanel';
@@ -10,6 +11,8 @@ import QueryInput from '@/components/QueryInput';
 const Index = () => {
     const { isDark, toggle } = useTheme();
     const { toast } = useToast();
+    const { token } = useAuth(); // 👈 Grab token securely from context
+    
     const [messages, setMessages] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [uploadedFiles, setUploadedFiles] = useState([]);
@@ -23,11 +26,20 @@ const Index = () => {
         async (files) => {
             setIsLoading(true);
             const formData = new FormData();
-            files.forEach((f) => formData.append("files", f));
+            
+            // Note: Ensure "files" matches your backend multer config (e.g., upload.array('files'))
+            files.forEach((f) => formData.append("files", f)); 
+            
             addMessage("system", "Uploading and processing files");
 
             try {
-                const res = await fetch("api/upload", { method: "POST", body: formData });
+                const res = await fetch("/api/upload", { 
+                    method: "POST", 
+                    headers: {
+                        Authorization: `Bearer ${token}`, // 👈 Use context token
+                    },
+                    body: formData 
+                });
                 if (!res.ok) throw new Error(`Upload failed: ${res.statusText}`);
                 const data = await res.json();
                 setUploadedFiles((prev) => [...prev, ...data.files]);
@@ -40,7 +52,7 @@ const Index = () => {
                 setIsLoading(false);
             }
         },
-        [addMessage, toast]
+        [addMessage, toast, token] // 👈 Added token to dependencies
     );
 
     const sendQuery = useCallback(
@@ -52,8 +64,15 @@ const Index = () => {
             try {
                 const res = await fetch("/api/chat", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ query, context: uploadedFiles.map((f) => f.name), files: uploadedFiles }),
+                    headers: { 
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}` // 👈 Use context token
+                    },
+                    body: JSON.stringify({ 
+                        query, 
+                        context: uploadedFiles.map((f) => f.name), 
+                        files: uploadedFiles 
+                    }),
                 });
                 const data = await res.json();
                 addMessage("assistant", data.response || "I encountered an error processing your query. Please try again.");
@@ -63,11 +82,11 @@ const Index = () => {
                 setIsLoading(false);
             }
         },
-        [addMessage, uploadFiles]
+        [addMessage, uploadedFiles, token] // 👈 FIXED: Replaced uploadFiles with uploadedFiles
     );
 
     const removeFile = useCallback((index) => {
-        setUploadedFiles((prev) => prev.filter((_, i) => i != index));
+        setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
     }, []);
 
     return (
