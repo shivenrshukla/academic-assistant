@@ -23,7 +23,7 @@ RUN pip3 install --no-cache-dir -r ai/requirements.txt
 # --------- 2. Setup Node.js Backend ---------
 # Copy Node dependencies specifically to cache the npm install layer
 COPY backend/package*.json ./backend/
-RUN cd backend && npm ci
+RUN cd backend && npm install
 
 # --------- 3. Copy Application Code ---------
 # Copy the rest of the application
