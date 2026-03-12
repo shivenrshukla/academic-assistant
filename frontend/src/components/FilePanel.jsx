@@ -1,10 +1,19 @@
 import { useCallback, useRef, useState } from "react";
-import { FileText, Upload, X, FileIcon } from "lucide-react";
+import { FileText, Upload, X, FileIcon, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-const FilePanel = ({ open, files, onUpload, onRemoveFile, isLoading }) => {
+const FilePanel = ({ 
+    open, 
+    files, 
+    conversations = [], 
+    activeConversationId, 
+    onUpload, 
+    onRemoveFile, 
+    onSelectConversation, 
+    isLoading 
+}) => {
     const inputRef = useRef(null);
     const [dragOver, setDragOver] = useState(false);
 
@@ -71,23 +80,64 @@ const FilePanel = ({ open, files, onUpload, onRemoveFile, isLoading }) => {
 
       {/* File list */}
       <ScrollArea className="flex-1 px-3 pb-3">
-        <div className="space-y-1.5">
-          {files.map((file, i) => (
-            <div
-              key={`${file.name}-${i}`}
-              className="msg-animate flex items-center gap-2 px-2.5 py-2 rounded-lg bg-muted/50 hover:bg-muted group transition-colors"
-            >
-              <FileIcon className="h-4 w-4 text-primary shrink-0" />
-              <span className="text-xs truncate flex-1">{file.name}</span>
-              <button
-                onClick={() => onRemoveFile(i)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/20"
-              >
-                <X className="h-3 w-3 text-destructive" />
-              </button>
+        {files.length > 0 && (
+          <div className="space-y-1.5 mb-6">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+              New Documents
             </div>
-          ))}
-        </div>
+            {files.map((file, i) => (
+              <div
+                key={`${file.name}-${i}`}
+                className="msg-animate flex items-center gap-2 px-2.5 py-2 rounded-lg bg-muted/50 hover:bg-muted group transition-colors"
+              >
+                <FileIcon className="h-4 w-4 text-primary shrink-0" />
+                <span className="text-xs truncate flex-1">{file.name}</span>
+                <button
+                  onClick={() => onRemoveFile(i)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/20"
+                >
+                  <X className="h-3 w-3 text-destructive" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Conversations list */}
+        {conversations.length > 0 && (
+          <div className="space-y-1.5">
+            <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-2 py-1">
+              Recent Chats
+            </div>
+            {conversations.map((conv) => (
+              <button
+                key={conv._id}
+                onClick={() => onSelectConversation(conv._id, conv.document?._id)}
+                className={`w-full text-left msg-animate flex flex-col gap-1 px-2.5 py-2 rounded-lg transition-colors ${
+                  activeConversationId === conv._id 
+                    ? "bg-primary/10 border border-primary/20" 
+                    : "bg-muted/30 hover:bg-muted/80"
+                }`}
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${
+                    activeConversationId === conv._id ? "text-primary" : "text-muted-foreground"
+                  }`} />
+                  <span className={`text-xs truncate font-medium flex-1 ${
+                    activeConversationId === conv._id ? "text-primary dark:text-primary-foreground" : "text-foreground dark:text-white"
+                  }`}>
+                    {conv.title || "Untitled Chat"}
+                  </span>
+                </div>
+                {conv.document?.filename && (
+                  <div className="text-[10px] text-muted-foreground truncate pl-5">
+                    Doc: {conv.document.filename}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </ScrollArea>
     </aside>
   );

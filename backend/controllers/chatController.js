@@ -167,3 +167,30 @@ export const runQuery = async (req, res) => {
     });
   }
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/chat/conversations
+//
+// Retrieve all active conversations for the logged-in user to populate the sidebar.
+// ─────────────────────────────────────────────────────────────────────────────
+export const getConversations = async (req, res) => {
+  try {
+    const conversations = await Conversation.find({
+      user: req.user.id,
+      expiresAt: { $gt: new Date() },
+    })
+      .populate('document', 'filename status storageUrl')
+      .sort({ lastMessageAt: -1 });
+
+    return res.status(200).json({
+      success: true,
+      conversations,
+    });
+  } catch (error) {
+    console.error('Fetch conversations error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to fetch conversations.',
+    });
+  }
+};

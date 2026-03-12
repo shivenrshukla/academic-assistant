@@ -20,12 +20,6 @@ dotenv.config();
 // FIX: Firebase Admin was never initialized anywhere.
 //      Must be done before any firebase-admin usage (uploadToFirebase, etc.)
 // ─────────────────────────────────────────────────────────────────────────────
-import postgres from 'postgres'
-
-const connectionString = process.env.DATABASE_URL
-const sql = postgres(connectionString)
-
-export default sql
 
 // Connect to MongoDB
 await connectDB();
@@ -83,8 +77,8 @@ cron.schedule('0 2 * * *', async () => {
         // 1. Delete Qdrant collection
         await deleteCollection(doc.qdrantCollection);
 
-        // 2. Delete Firebase file
-        await deleteFromFirebase(doc.storagePath);
+        // 2. Delete Supabase file
+        await deleteFromSupabase(doc.storagePath);
 
         // 3. Delete all conversations for this document
         const conversations = await Conversation.find({ document: doc._id });

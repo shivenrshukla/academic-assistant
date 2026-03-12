@@ -41,7 +41,7 @@ const Signup = () => {
     setIsLoading(true);
     try {
       // Passed name to the register function
-      await register(email, password, role, name);
+      await register(name, email, password, role);
       navigate("/", { replace: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed";

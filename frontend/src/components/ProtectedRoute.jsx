@@ -4,6 +4,8 @@ import { useAuth } from "@/contexts/AuthContext";
 const ProtectedRoute = ({ children }) => {
   const { isAuthenticated, isLoading } = useAuth();
 
+  console.log("Auth State: ", { isAuthenticated, isLoading });
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">

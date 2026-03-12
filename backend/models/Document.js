@@ -24,7 +24,6 @@ const documentSchema = new mongoose.Schema(
     qdrantCollection: {
       type: String, // Format: userId_documentId
       required: true,
-      unique: true,
     },
     chunkCount: {
       type: Number,

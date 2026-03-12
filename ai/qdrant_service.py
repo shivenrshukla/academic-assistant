@@ -1,18 +1,28 @@
-# faiss_service.py (renamed logically — uses Qdrant, not FAISS)
+# faiss_service.py
 import os
-from qdrant_client import QdrantClient
-from qdrant_client.models import VectorParams, Distance, PointStruct, ScoredPoint
-from typing import cast
+import gc
 import uuid
+from datetime import datetime
+from contextlib import asynccontextmanager
+from typing import cast
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
-from datetime import datetime
-from contextlib import asynccontextmanager
+from qdrant_client import QdrantClient
+from qdrant_client.models import VectorParams, Distance, PointStruct, ScoredPoint
 
 # ── Config ────────────────────────────────────────────────────────────────────
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+# 1. Load environment variables BEFORE trying to read them
+load_dotenv()
+
+QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+
+if not QDRANT_URL:
+    print("⚠️ WARNING: QDRANT_URL not found in environment. Falling back to localhost.")
+    QDRANT_URL = "http://localhost:6333"
 
 # ── Model ─────────────────────────────────────────────────────────────────────
 print("🔌 Loading local embedding model...")
@@ -26,6 +36,7 @@ EMBEDDING_DIM: int = embedding_dim
 print(f"✅ Model loaded  |  Embedding dim: {EMBEDDING_DIM}")
 
 # ── Qdrant Client ─────────────────────────────────────────────────────────────
+print(f"📡 Connecting to Qdrant at: {QDRANT_URL}")
 client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
@@ -70,7 +81,6 @@ class SearchRequest(BaseModel):
 
 
 class EmbedRequest(BaseModel):
-    # NEW: single-text embed endpoint used by the JS embedding.js service
     text: str
 
 
@@ -89,6 +99,7 @@ def add_documents(req: AddRequest):
         print(f"📥 Indexing {len(req.chunks)} chunks into '{req.collection_name}'")
         ensure_collection(req.collection_name)
 
+        # 1. Create local embeddings
         vectors = embed_texts(req.chunks)
         points = [
             PointStruct(
@@ -102,9 +113,17 @@ def add_documents(req: AddRequest):
             for i in range(len(req.chunks))
         ]
 
+        # 2. Pass them on to Qdrant Cloud
         client.upsert(collection_name=req.collection_name, points=points)
         print(f"✅ Indexed {len(points)} chunks")
-        return {"status": "ok", "chunks_added": len(points)}
+
+        # 3. Delete local embeddings from RAM explicitly
+        del vectors
+        del points
+        gc.collect() # Force garbage collector to clean up RAM immediately
+        print("🧹 Local memory cleared")
+
+        return {"status": "ok", "chunks_added": len(req.chunks)}
 
     except Exception as e:
         print(f"❌ Error in /add: {e}")
@@ -114,12 +133,16 @@ def add_documents(req: AddRequest):
 @app.post("/search")
 def search(req: SearchRequest):
     try:
+        # Create a single embedding for the query locally
         query_vector = embed_texts([req.query])[0]
+        
+        # 4. Do vector search on Qdrant
         response = client.query_points(
             collection_name=req.collection_name,
             query=query_vector,
             limit=req.top_k,
         )
+        
         points = cast(list[ScoredPoint], response.points)
         return [
             {
@@ -133,7 +156,6 @@ def search(req: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# NEW: single-text embed endpoint — called by JS embedding.js for query-time use
 @app.post("/embed")
 def embed_single(req: EmbedRequest):
     try:
