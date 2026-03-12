@@ -1,0 +1,12 @@
+.git
+.github
+node_modules
+frontend
+ai/venv
+.env
+*.log
+.DS_Store
+implementation_plan.md
+project_review.md
+task.md
+render.yaml
