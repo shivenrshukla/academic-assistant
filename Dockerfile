@@ -18,12 +18,14 @@ WORKDIR /app
 # --------- 1. Setup Python AI Service ---------
 # Copy AI dependencies specifically to cache the pip install layer
 COPY ai/requirements.txt ./ai/
+# Install CPU-only PyTorch first to avoid default 2GB CUDA binaries
+RUN pip3 install --no-cache-dir torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 RUN pip3 install --no-cache-dir -r ai/requirements.txt
 
 # --------- 2. Setup Node.js Backend ---------
 # Copy Node dependencies specifically to cache the npm install layer
 COPY backend/package*.json ./backend/
-RUN cd backend && npm install
+RUN cd backend && npm install && npm cache clean --force
 
 # --------- 3. Copy Application Code ---------
 # Copy the rest of the application

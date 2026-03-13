@@ -1,8 +1,13 @@
 .git
 .github
-node_modules
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/venv
+**/.venv
+backend/uploads
+ai/uploads
 frontend
-ai/venv
 .env
 *.log
 .DS_Store
