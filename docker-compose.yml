@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+    restart: always
+
+# Note: We removed the Python AI (faiss/qdrant) service 
+# because embeddings are now handled directly by the Node 
+# backend via the Gemini API, saving significant memory.

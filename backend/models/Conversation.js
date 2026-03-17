@@ -9,10 +9,14 @@ const conversationSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    document: {
+    documents: [{
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Document',
+    }],
+    qdrantCollection: {
+      type: String,
       required: true,
+      unique: true,
     },
     title: {
       type: String,
@@ -31,5 +35,4 @@ const conversationSchema = new mongoose.Schema(
 // TTL index — MongoDB auto-deletes conversation when expiresAt is reached
 conversationSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// FIX: was `module.exports` mixed with ESM `import`
 export default mongoose.model('Conversation', conversationSchema);

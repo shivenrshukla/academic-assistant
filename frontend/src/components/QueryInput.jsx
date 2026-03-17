@@ -34,10 +34,12 @@ function QueryInput({ onSend, disabled }) {
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder='Ask a question about your documents…'
+                        placeholder={disabled ? 'Upload a document or select a chat to begin…' : 'Ask a question about your documents…'}
                         rows={1}
                         disabled={disabled}
-                        className="flex-1 resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50 min-h-[40px] max-h-[120px]"
+                        className={`flex-1 resize-none bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground transition-all duration-300 ${
+                            disabled ? "cursor-not-allowed opacity-40" : "cursor-text opacity-100"
+                        } min-h-[40px] max-h-[120px]`}
                     />
                     <Button
                         type="submit"

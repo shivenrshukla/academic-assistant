@@ -10,8 +10,12 @@ cd /app/ai
 python3 -m uvicorn qdrant_service:app --host 0.0.0.0 --port 8000 &
 PYTHON_PID=$!
 
-# Wait a moment to ensure Python service starts successfully
-sleep 3
+# Wait until the Python AI service is responsive
+echo "Waiting for Python AI Service to start..."
+while ! curl -s http://localhost:8000/docs > /dev/null; do
+  sleep 1
+done
+echo "Python AI Service is up!"
 
 # 2. Start the Node.js Backend in the foreground
 echo "Starting Node.js Backend on port 5000..."

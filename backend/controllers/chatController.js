@@ -8,50 +8,36 @@ import Document from '../models/Document.js';
 const TTL_DAYS = 7;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /api/chat/session/:documentId
+// GET /api/chat/session/:conversationId
 //
-// "Reload embeddings" endpoint — called when a user opens a chat for a document.
-// Verifies the document exists, belongs to the user, and Qdrant collection is
-// reachable. Returns or creates a Conversation. Also returns message history.
+// "Reload embeddings" endpoint — called when a user opens a chat for a workspace.
+// Verifies the conversation exists, belongs to the user, and Qdrant collection is
+// reachable. Returns the Conversation and message history.
 // ─────────────────────────────────────────────────────────────────────────────
 export const initSession = async (req, res) => {
   try {
-    const { documentId } = req.params;
+    const { conversationId } = req.params;
 
-    // Load document and verify ownership
-    const doc = await Document.findOne({ _id: documentId, user: req.user.id });
-    if (!doc) {
-      return res.status(404).json({ success: false, error: 'Document not found.' });
-    }
-    if (doc.status !== 'ready') {
-      return res.status(400).json({ success: false, error: `Document status: ${doc.status}` });
+    // Load conversation and verify ownership
+    const conversation = await Conversation.findOne({
+      _id: conversationId,
+      user: req.user.id,
+      expiresAt: { $gt: new Date() },
+    }).populate('documents');
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, error: 'Conversation not found.' });
     }
 
     // Verify the Qdrant collection is reachable with a trivial search
     try {
-      await searchVectorStore('test', doc.qdrantCollection, 1);
+      if (conversation.documents.length > 0) {
+        await searchVectorStore('test', conversation.qdrantCollection, 1);
+      }
     } catch {
       return res.status(503).json({
         success: false,
         error: 'Vector store unavailable. Embeddings may still be loading.',
-      });
-    }
-
-    // Find existing open conversation or create one
-    let conversation = await Conversation.findOne({
-      user: req.user.id,
-      document: doc._id,
-      expiresAt: { $gt: new Date() },
-    });
-
-    if (!conversation) {
-      const expiresAt = new Date(Date.now() + TTL_DAYS * 24 * 60 * 60 * 1000);
-      conversation = await Conversation.create({
-        user: req.user.id,
-        document: doc._id,
-        title: doc.filename,
-        lastMessageAt: new Date(),
-        expiresAt,
       });
     }
 
@@ -63,9 +49,9 @@ export const initSession = async (req, res) => {
     return res.status(200).json({
       success: true,
       conversationId: conversation._id,
-      documentId: doc._id,
-      filename: doc.filename,
-      expiresAt: doc.expiresAt,
+      documents: conversation.documents,
+      title: conversation.title,
+      expiresAt: conversation.expiresAt,
       messages,
     });
 
@@ -102,15 +88,10 @@ export const runQuery = async (req, res) => {
     const conversation = await Conversation.findOne({
       _id: conversationId,
       user: req.user.id,
-    }).populate('document');
+    });
 
     if (!conversation) {
       return res.status(404).json({ success: false, error: 'Conversation not found.' });
-    }
-
-    const doc = conversation.document;
-    if (!doc || doc.status !== 'ready') {
-      return res.status(400).json({ success: false, error: 'Document is not ready.' });
     }
 
     // Load recent message history for context (last 10 messages)
@@ -130,10 +111,10 @@ export const runQuery = async (req, res) => {
       expiresAt,
     });
 
-    // Run RAG with the correct scoped collection
+    // Run RAG with the correct scoped collection from Conversation
     const { answer, citations } = await processQuery(
       query,
-      doc.qdrantCollection,
+      conversation.qdrantCollection,
       history
     );
 
@@ -179,7 +160,7 @@ export const getConversations = async (req, res) => {
       user: req.user.id,
       expiresAt: { $gt: new Date() },
     })
-      .populate('document', 'filename status storageUrl')
+      .populate('documents', 'filename status storageUrl')
       .sort({ lastMessageAt: -1 });
 
     return res.status(200).json({
@@ -191,6 +172,43 @@ export const getConversations = async (req, res) => {
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch conversations.',
+    });
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUT /api/chat/conversations/:conversationId
+//
+// Rename a conversation title.
+// ─────────────────────────────────────────────────────────────────────────────
+export const renameConversation = async (req, res) => {
+  try {
+    const { conversationId } = req.params;
+    const { title } = req.body;
+
+    if (!title || !title.trim()) {
+      return res.status(400).json({ success: false, error: 'Title is required.' });
+    }
+
+    const conversation = await Conversation.findOneAndUpdate(
+      { _id: conversationId, user: req.user.id },
+      { $set: { title: title.trim() } },
+      { new: true }
+    );
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, error: 'Conversation not found.' });
+    }
+
+    return res.status(200).json({
+      success: true,
+      conversation,
+    });
+  } catch (error) {
+    console.error('Rename conversation error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Failed to rename conversation.',
     });
   }
 };

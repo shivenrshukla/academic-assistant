@@ -41,24 +41,24 @@ export function AuthProvider({ children }) {
       throw new Error(err.message || err.error || "Login failed");
     }
     const data = await res.json();
-    const userData = { email, role: data.role || "user", ...data.user };
+    const userData = { email, ...data.user };
     setToken(data.token);
     setUser(userData);
     localStorage.setItem("auth_user", JSON.stringify(userData));
   }, []);
 
-  const register = useCallback(async (name, email, password, role) => {
+  const register = useCallback(async (name, email, password) => {
     const res = await fetch(getApiUrl("/api/auth/register"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, role }),
+      body: JSON.stringify({ name, email, password}),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.message || err.error || "Registration failed");
     }
     const data = await res.json();
-    const userData = { email, role, ...data.user };
+    const userData = { name, email, ...data.user };
     setToken(data.token);
     setUser(userData);
     localStorage.setItem("auth_user", JSON.stringify(userData));

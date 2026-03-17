@@ -1,5 +1,4 @@
 // controllers/authController.js
-// FIX: was using require() / exports. (CommonJS) while entire project uses ESM.
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
@@ -13,7 +12,7 @@ if (!process.env.JWT_SECRET) {
 // ─────────────────────────────────────────────
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id, email: user.email, role: user.role },
+    { id: user._id, email: user.email },
     process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
@@ -28,14 +27,20 @@ export const registerUser = async (req, res) => {
     const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: 'All fields are required.' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'All fields are required.' 
+      });
     }
 
     const normalizedEmail = email.toLowerCase();
 
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return res.status(400).json({ message: 'Email already registered.' });
+      return res.status(400).json({
+        success: false, 
+        message: 'Email already registered.' 
+      });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -44,25 +49,27 @@ export const registerUser = async (req, res) => {
     const user = await User.create({
       name,
       email: normalizedEmail,
-      passwordHash,
-      role: "user"
+      passwordHash
     });
 
     const token = generateToken(user);
 
-    res.status(201).json({
+    return res.status(201).json({
+      success: true,
       message: 'User registered successfully.',
       token,
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
       }
     });
   } catch (error) {
     console.error('Register Error:', error);
-    res.status(500).json({ message: 'Server error.' });
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server error.' 
+    });
   }
 };
 
@@ -75,28 +82,41 @@ export const loginUser = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password required.' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email and password required.' 
+      });
     }
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ message: 'Invalid credentials.' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid credentials.' 
+      });
     }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
     if (!isMatch) {
-      return res.status(400).json({ message: 'Invalid credentials.' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Invalid credentials.' 
+      });
     }
 
     const token = generateToken(user);
 
-    res.json({
+    return res.status(200).json({
+      success: true,
       message: 'Login successful.',
       token,
       user: { id: user._id, name: user.name, email: user.email },
     });
   } catch (error) {
     console.error('Login Error:', error);
-    res.status(500).json({ message: 'Server error.' });
+    return res.status(500).json({ 
+      success: false,
+      message: 'Server error.' 
+    });
   }
 };

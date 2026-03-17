@@ -21,10 +21,6 @@ const documentSchema = new mongoose.Schema(
       type: String, // Firebase public URL
       required: true,
     },
-    qdrantCollection: {
-      type: String, // Format: userId_documentId
-      required: true,
-    },
     chunkCount: {
       type: Number,
       default: 0,
@@ -45,5 +41,4 @@ const documentSchema = new mongoose.Schema(
 // NOTE: The cleanup cron in index.js handles Qdrant + Firebase BEFORE this fires.
 documentSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
-// FIX: was `module.exports` mixed with ESM `import`
 export default mongoose.model('Document', documentSchema);

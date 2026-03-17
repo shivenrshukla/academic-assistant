@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import AmbientBackground from "@/components/AmbientBackground";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useTheme } from "@/hooks/useTheme";
-import { UserPlus, Mail, Lock, ArrowRight, Shield, User } from "lucide-react";
+import { UserPlus, Mail, Lock, ArrowRight, User } from "lucide-react";
 
 const Signup = () => {
   const { register } = useAuth();
@@ -21,7 +21,6 @@ const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState("user");
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (e) => {
@@ -41,7 +40,7 @@ const Signup = () => {
     setIsLoading(true);
     try {
       // Passed name to the register function
-      await register(name, email, password, role);
+      await register(name, email, password);
       navigate("/", { replace: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Registration failed";
@@ -103,37 +102,6 @@ const Signup = () => {
                   required
                   autoComplete="email"
                 />
-              </div>
-            </div>
-
-            {/* Role selection */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-foreground">Role</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRole("user")}
-                  className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${
-                    role === "user"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/50 bg-background/50 text-muted-foreground hover:border-border"
-                  }`}
-                >
-                  <UserPlus className="w-4 h-4" />
-                  User
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRole("admin")}
-                  className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${
-                    role === "admin"
-                      ? "border-primary bg-primary/10 text-primary"
-                      : "border-border/50 bg-background/50 text-muted-foreground hover:border-border"
-                  }`}
-                >
-                  <Shield className="w-4 h-4" />
-                  Admin
-                </button>
               </div>
             </div>
 

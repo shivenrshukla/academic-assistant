@@ -1,6 +1,5 @@
 # faiss_service.py
 import os
-import gc
 import uuid
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -14,7 +13,6 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct, ScoredPoint
 
 # ── Config ────────────────────────────────────────────────────────────────────
-# 1. Load environment variables BEFORE trying to read them
 load_dotenv()
 
 QDRANT_URL = os.getenv("QDRANT_URL")
@@ -47,14 +45,18 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 
 def ensure_collection(collection_name: str):
-    existing = client.get_collections().collections
-    names = [c.name for c in existing]
-    if collection_name not in names:
+    if not client.collection_exists(collection_name=collection_name):
         client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
         )
         print(f"🆕 Created collection: {collection_name}")
+
+def generate_deterministic_id(collection_name: str, text: str) -> str:
+    # If the exact same text is uploaded to the same collection twice, 
+    # Qdrant will simply overwrite it instead of creating a duplicate.
+    unique_string = f"{collection_name}_{text}"
+    return str(uuid.uuid5(uuid.NAMESPACE_OID, unique_string))
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -99,31 +101,35 @@ def add_documents(req: AddRequest):
         print(f"📥 Indexing {len(req.chunks)} chunks into '{req.collection_name}'")
         ensure_collection(req.collection_name)
 
-        # 1. Create local embeddings
-        vectors = embed_texts(req.chunks)
-        points = [
-            PointStruct(
-                id=str(uuid.uuid4()),
-                vector=vectors[i],
-                payload={
-                    "content": req.chunks[i],
-                    "timestamp": datetime.utcnow().isoformat(),
-                },
-            )
-            for i in range(len(req.chunks))
-        ]
+        BATCH_SIZE = 100
+        total_added = 0
 
-        # 2. Pass them on to Qdrant Cloud
-        client.upsert(collection_name=req.collection_name, points=points)
-        print(f"✅ Indexed {len(points)} chunks")
+        for i in range(0, len(req.chunks), BATCH_SIZE):
+            batch_chunks = req.chunks[i : i + BATCH_SIZE]
 
-        # 3. Delete local embeddings from RAM explicitly
-        del vectors
-        del points
-        gc.collect() # Force garbage collector to clean up RAM immediately
-        print("🧹 Local memory cleared")
+            # 1. Create local embeddings
+            vectors = embed_texts(batch_chunks)
+            points = [
+                PointStruct(
+                    id=generate_deterministic_id(req.collection_name, chunk_text),
+                    vector=vectors[idx],
+                    payload={
+                        "content": chunk_text,
+                        "timestamp": datetime.utcnow().isoformat(),
+                    },
+                )
+                for idx, chunk_text in enumerate(batch_chunks)
+            ]
+            
+            # Upsert the batch to Qdrant
+            client.upsert(collection_name=req.collection_name, points=points)
+            total_added += len(points)
 
-        return {"status": "ok", "chunks_added": len(req.chunks)}
+            print(f"⏳ Progress: {total_added}/{len(req.chunks)} chunks indexed...")
+
+        # Python will naturally clean up the variables when the function returns.
+        print(f"✅ Successfully indexed all {total_added} chunks")
+        return {"status": "ok", "chunks_added": total_added}
 
     except Exception as e:
         print(f"❌ Error in /add: {e}")
@@ -164,7 +170,6 @@ def embed_single(req: EmbedRequest):
     except Exception as e:
         print(f"❌ Error in /embed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/delete_collection")
 def delete_collection(req: DeleteCollectionRequest):

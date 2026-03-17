@@ -28,7 +28,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 const allowedOrigins = [
-  'http://localhost:5173',          // Local frontend
+  'http://localhost:8080',          // Local frontend
   'https://academic-assistant-vert.vercel.app', // Deployed frontend
   process.env.FRONTEND_URL          // Fallback env variable
 ].filter(Boolean);
